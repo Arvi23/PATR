@@ -23,23 +23,31 @@ pthread_mutex_t natural_gas_mutex;
 pthread_mutex_t cars_exiting_mutex;
 pthread_mutex_t flag_mutex;
 
-void* handle_user_input(void* arg) {
+void *handle_user_input(void *arg)
+{
     char command[100];
-    while (1) {
+    while (1)
+    {
         printf("Enter command (Pause, Reset, Resume): ");
-        fflush(stdout);  // Flush the output buffer
+        fflush(stdout); // Flush the output buffer
 
         scanf("%99s", command);
-        while (getchar() != '\n');  // Clear the input buffer
+        while (getchar() != '\n')
+            ; // Clear the input buffer
 
         pthread_mutex_lock(&flag_mutex);
-        if (strcmp(command, "Pause") == 0) {
+        if (strcmp(command, "Pause") == 0)
+        {
             pause_flag = 1;
-        } else if (strcmp(command, "Reset") == 0) {
+        }
+        else if (strcmp(command, "Reset") == 0)
+        {
             cars_in_tunnel = 0;
             co2_level = 0.0;
             natural_gas_level = 0.0;
-        } else if (strcmp(command, "Resume") == 0) {
+        }
+        else if (strcmp(command, "Resume") == 0)
+        {
             pause_flag = 0;
         }
         pthread_mutex_unlock(&flag_mutex);
@@ -47,14 +55,19 @@ void* handle_user_input(void* arg) {
     return NULL;
 }
 
-
-void* measure_co2(void* arg) {
-    while (1) {
+void *measure_co2(void *arg)
+{
+    while (1)
+    {
         pthread_mutex_lock(&co2_mutex);
-        co2_level = (rand() % 1000) / 10.0; // Random CO2 level between 0.0 and 99.9
-        printf("Measured CO2 level: %.1f\n", co2_level);
+        if (pause_flag == 0)
+        {
+            co2_level = (rand() % 1000) / 10.0; // Random CO2 level between 0.0 and 99.9
+            printf("Measured CO2 level: %.1f\n", co2_level);
+        }
 
-        if (co2_level > 80.0) {
+        if (co2_level > 80.0)
+        {
             pthread_mutex_lock(&flag_mutex);
             pause_flag = 1;
             pthread_mutex_unlock(&flag_mutex);
@@ -66,13 +79,19 @@ void* measure_co2(void* arg) {
     return NULL;
 }
 
-void* measure_natural_gas(void* arg) {
-    while (1) {
+void *measure_natural_gas(void *arg)
+{
+    while (1)
+    {
         pthread_mutex_lock(&natural_gas_mutex);
-        natural_gas_level = (rand() % 1000) / 10.0; // Random Natural Gas level between 0.0 and 99.9
-        printf("Measured Natural Gas level: %.1f\n", natural_gas_level);
+        if (pause_flag == 0)
+        {
+            natural_gas_level = (rand() % 1000) / 10.0; // Random Natural Gas level between 0.0 and 99.9
+            printf("Measured Natural Gas level: %.1f\n", natural_gas_level);
+        }
 
-        if (natural_gas_level > 80.0) {
+        if (natural_gas_level > 80.0)
+        {
             pthread_mutex_lock(&flag_mutex);
             pause_flag = 1;
             pthread_mutex_unlock(&flag_mutex);
@@ -84,21 +103,31 @@ void* measure_natural_gas(void* arg) {
     return NULL;
 }
 
-
-void* count_cars_entering(void* arg) {
-    while (1) {
+void *count_cars_entering(void *arg)
+{
+    while (1)
+    {
         pthread_mutex_lock(&flag_mutex);
-        if (pause_flag) {
+        if (pause_flag)
+        {
             pthread_mutex_unlock(&flag_mutex);
-            printf("High CO2/Natural Gas levels. Pausing entry for 10 seconds.\n");
-            sleep(10); // Sleep for 10 seconds
+            printf("High CO2/Natural Gas levels. Pausing entry \n");
+            printf("Evacuating cars...\n");
+            while(cars_in_tunnel)
+            {
+                sleep(1);
+            }
+            co2_level = 0.0;
+            natural_gas_level = 0.0;
+            printf("Cars evacuated. Resuming entry...\n");
             pthread_mutex_lock(&flag_mutex);
-            pause_flag = 0; // Reset flag
         }
+        pause_flag = 0; // Reset flag
         pthread_mutex_unlock(&flag_mutex);
 
         pthread_mutex_lock(&cars_mutex);
-        while (cars_in_tunnel >= MAX_CARS) {
+        while (cars_in_tunnel >= MAX_CARS)
+        {
             printf("Cars entering mutex: Max capacity reached. Pausing entry.\n");
             pthread_cond_wait(&cond, &cars_mutex); // Wait for signal to resume
         }
@@ -111,33 +140,41 @@ void* count_cars_entering(void* arg) {
     return NULL;
 }
 
-void* count_cars_exiting(void* arg) {
-    while (1) {
+void *count_cars_exiting(void *arg)
+{
+    while (1)
+    {
         pthread_mutex_lock(&cars_exiting_mutex);
-        if (cars_in_tunnel > 0) {
+        if (cars_in_tunnel > 0)
+        {
             cars_in_tunnel--;
             printf("Car exited. Cars in tunnel: %d\n", cars_in_tunnel);
             pthread_cond_signal(&cond); // Signal the car entering thread
         }
         pthread_mutex_unlock(&cars_exiting_mutex);
-        sleep(rand()%6); //Time delay between 0 and 9 seconds
+        sleep(rand() % 6); // Time delay between 0 and 9 seconds
 
-                int should_pause = pause_flag;
+        int should_pause = pause_flag;
         pthread_mutex_unlock(&flag_mutex);
 
-        if (should_pause) {
+        if (should_pause)
+        {
             sleep(1); // Or use a condition variable to sleep until resumed
             continue;
         }
     }
     return NULL;
 }
-void* monitor_tunnel(void* arg) {
-    while (1) {
+void *monitor_tunnel(void *arg)
+{
+    while (1)
+    {
         pthread_mutex_lock(&cars_mutex);
-        if (cars_in_tunnel >= MAX_CARS) {
+        if (cars_in_tunnel >= MAX_CARS)
+        {
             printf("Monitor: Max capacity reached. Pausing entry until there is space.\n");
-            while (cars_in_tunnel >= MAX_CARS) {
+            while (cars_in_tunnel >= MAX_CARS)
+            {
                 // Wait for the condition to change (car exits)
                 pthread_cond_wait(&cond, &cars_mutex);
             }
@@ -147,10 +184,11 @@ void* monitor_tunnel(void* arg) {
         pthread_mutex_unlock(&cars_mutex);
         usleep(100000); // Check periodically
 
-                int should_pause = pause_flag;
+        int should_pause = pause_flag;
         pthread_mutex_unlock(&flag_mutex);
 
-        if (should_pause) {
+        if (should_pause)
+        {
             sleep(1); // Or use a condition variable to sleep until resumed
             continue;
         }
@@ -158,8 +196,8 @@ void* monitor_tunnel(void* arg) {
     return NULL;
 }
 
-
-int main() {
+int main()
+{
     pthread_t thread1, thread2, monitor_thread, co2_thread, natural_gas_thread, user_input_thread;
 
     // Initialize mutexes and condition variable
