@@ -24,7 +24,7 @@ The Tunnel Monitoring System is a robust and efficient application designed to e
 3. Run the program:
    ```bash
    ./tunnel_monitor.c
-Interact with the program using the following commands:
+##Interact with the program using the following commands:
 
     p - Pause monitoring
     r - Reset sensor values and tunnel state
