@@ -21,5 +21,17 @@ The Tunnel Monitoring System is a robust and efficient application designed to e
 2. Compile the program:
    ```bash
    gcc -o tunnel_monitor tunnel_monitor.c -lpthread
+3. Run the program:
+   ```bash
+   ./tunnel_monitor.c
+Interact with the program using the following commands:
 
+    p - Pause monitoring
+    r - Reset sensor values and tunnel state
+    c - Continue monitoring
+    s - Display smoke level
+    g - Display natural gas level
+    t - Display number of cars in the tunnel
+    a - Display alert flag status
+    q - Quit the program
 
