@@ -32,10 +32,10 @@ pthread_cond_t cond;
 // Function to set terminal in raw mode to capture single key presses
 void set_raw_mode()
 {
-    struct termios tty;
+    struct termios tty; // Terminal I/O API for POSIX
     tcgetattr(STDIN_FILENO, &tty); 
-    tty.c_lflag &= ~(ICANON | ECHO); // Disable echo and canonical mode
-    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+    tty.c_lflag &= ~(ICANON | ECHO); // Disable echo and canonical mode, this way every key press is captured
+    tcsetattr(STDIN_FILENO, TCSANOW, &tty); //Change is set immediately
 }
 
 
@@ -44,8 +44,8 @@ void reset_terminal_mode()
 {
     struct termios tty;
     tcgetattr(STDIN_FILENO, &tty);
-    tty.c_lflag |= (ICANON | ECHO); // Enable echo and canonical mode
-    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+    tty.c_lflag |= (ICANON | ECHO); // Enable echo and canonical mode, going back to default
+    tcsetattr(STDIN_FILENO, TCSANOW, &tty); //Change is set immediately
 }
 
 
@@ -54,6 +54,8 @@ void *handle_user_input(void *arg)
 {
     set_raw_mode(); //Here we set the input to be capturing single-key presses
     //This was done to bypass the constant output of sensors
+    
+    
     //Most commands are very self explanatory
     while (1)
     {
@@ -204,13 +206,13 @@ void *measure_smoke(void *arg)
                 printf("Measured smoke level: %.1f\n\n", smoke_level);
         }
 
-        if (smoke_level > 95.0)
+        if (smoke_level > 95.0) // If smoke level is above 95, set alert flag
         {
             alert_flag = 1;
         }
 
         pthread_mutex_unlock(&smoke_mutex);
-        sleep(1); // Measure every second
+        sleep(1); // Measure every second so we don't spam the console
     }
     return NULL;
 }
@@ -227,24 +229,24 @@ void *measure_natural_gas(void *arg)
                 printf("Measured Natural Gas level: %.1f\n", natural_gas_level);
         }
 
-        if (natural_gas_level > 95.0)
+        if (natural_gas_level > 95.0) // If natural gas level is above 95, set alert flag
         {
             alert_flag = 1;
         }
 
         pthread_mutex_unlock(&natural_gas_mutex);
-        sleep(1); // Measure every second
+        sleep(1); // Measure every second so we don't spam the console
     }
     return NULL;
 }
 
-void *count_cars_entering(void *arg)
+void *count_cars_entering(void *arg) // Function to count cars entering the tunnel and alert the operator if necessary
 {
     while (1)
     {
-        if (alert_flag)
+        if (alert_flag) // If alert flag is set, alert the operator
         {
-            if (smoke_level > 95.0)
+            if (smoke_level > 95.0) // If smoke level is above 95, deploy approriate measures
             {
                 printf("Smoke detected. Turning sprinkler system on and turning ventilation system to 100%%\n");
                 printf("Operator has been alerted...\n");
@@ -257,7 +259,7 @@ void *count_cars_entering(void *arg)
                 cars_in_tunnel = 0;
                 printf("Sprinkler system turned off. Resuming normal activity\n");
             }
-            else if (natural_gas_level > 95.0)
+            else if (natural_gas_level > 95.0) // If natural gas level is above 95, deploy approriate measures
             {
                 printf("Natural gas detected. Turning ventilation system to 100%%...\n");
                 printf("Playing alarm sound...\n");
@@ -270,7 +272,7 @@ void *count_cars_entering(void *arg)
                 printf("Ventilation system adjusted to normal levels. Resuming normal activity\n");
                 cars_in_tunnel = 0;
             }
-            else
+            else // If alert flag is set by operator, deploy approriate measures
             {
                 printf("Alert flag set by operator. Turning ventilation system to 100%%...\n");
                 printf("Playing alarm sound...\n");
@@ -282,20 +284,20 @@ void *count_cars_entering(void *arg)
             alert_flag = 0;
         }
 
-        pthread_mutex_lock(&cars_mutex);
+        pthread_mutex_lock(&cars_mutex); 
         while (cars_in_tunnel >= MAX_CARS)
         {
             printf("Cars entering mutex: Max capacity reached. Pausing entry.\n");
             pthread_cond_wait(&cond, &cars_mutex); // Wait for signal to resume
         }
         if(alert_flag == 0)
-            cars_in_tunnel++;
+            cars_in_tunnel++; //This way we don't increment the cars in tunnel if we are in alert mode
         if (output_flag == 1)
             printf("Car entered. Cars in tunnel: %d\n", cars_in_tunnel);
         pthread_mutex_unlock(&cars_mutex);
 
-        sleep(rand() % 3); // Time delay between 0 and 2 seconds
-        while (pause_flag)
+        sleep(rand() % 3); // Time delay between 0 and 3 seconds
+        while (pause_flag) // If pause flag is set, wait until it is unset
         {
             sleep(1);
         }
@@ -304,12 +306,12 @@ void *count_cars_entering(void *arg)
     return NULL;
 }
 
-void *count_cars_exiting(void *arg)
+void *count_cars_exiting(void *arg) // Same logic as count_cars_entering
 {
     while (1)
     {
         pthread_mutex_lock(&cars_exiting_mutex);
-        if (cars_in_tunnel > 0 && alert_flag == 0)
+        if (cars_in_tunnel > 0 && alert_flag == 0) // Only decrement if there are cars in the tunnel
         {
             cars_in_tunnel--;
             if (output_flag == 1)
@@ -317,17 +319,17 @@ void *count_cars_exiting(void *arg)
             pthread_cond_signal(&cond); // Signal the car entering thread
         }
         pthread_mutex_unlock(&cars_exiting_mutex);
-        sleep(rand() % 3 + 1); // Time delay between 0 and 3 seconds
+        sleep(rand() % 3 + 1); // Time delay between 1 and 4 seconds
 
         while (pause_flag)
         {
-            sleep(1);
+            sleep(1); // If pause flag is set, wait until it is unset
         }
     }
     return NULL;
 }
 
-void kill_mutexes()
+void kill_mutexes() // Function to destroy mutexes and condition variable
 {
     pthread_mutex_destroy(&cars_mutex);
     pthread_mutex_destroy(&smoke_mutex);
