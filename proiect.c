@@ -5,8 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <termios.h>
-// Cond variable
-pthread_cond_t cond;
+
 
 // Global variables
 const int MAX_CARS = 5; // Threshold for maximum cars in the tunnel
@@ -16,21 +15,27 @@ float natural_gas_level = 0.0;
 int pause_flag = 0;  // Flag to pause the car entering thread
 int alert_flag = 0;  // Flag to alert the car entering thread
 int output_flag = 1; // Flag to output the current state of the tunnel
+char command;
+
+
 // Mutexes for each variable
 pthread_mutex_t cars_mutex;
 pthread_mutex_t smoke_mutex;
 pthread_mutex_t natural_gas_mutex;
 pthread_mutex_t cars_exiting_mutex;
-char command;
+// Cond variable
+pthread_cond_t cond;
+
 
 // Function to set terminal in raw mode to capture single key presses
 void set_raw_mode()
 {
     struct termios tty;
-    tcgetattr(STDIN_FILENO, &tty);
+    tcgetattr(STDIN_FILENO, &tty); 
     tty.c_lflag &= ~(ICANON | ECHO); // Disable echo and canonical mode
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 }
+
 
 // Function to reset terminal to original settings
 void reset_terminal_mode()
@@ -41,10 +46,13 @@ void reset_terminal_mode()
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 }
 
+
+// Function for the operator to have input for different purposes
 void *handle_user_input(void *arg)
 {
-    set_raw_mode();
-
+    set_raw_mode(); //Here we set the input to be capturing single-key presses
+    //This was done to bypass the constant output of sensors
+    //Most commands are very self explanatory
     while (1)
     {
         command = getchar();
@@ -74,6 +82,8 @@ void *handle_user_input(void *arg)
         {
             printf("\nExiting...\n");
             reset_terminal_mode();
+            //We have to reset the terminal before exiting, otherwise the terminal will bug out
+            void kill_mutexes();
             exit(0);
         }
         else if (command == 's')
@@ -167,6 +177,7 @@ void *handle_user_input(void *arg)
     return NULL;
 }
 
+
 void *measure_smoke(void *arg)
 {
     while (1)
@@ -186,10 +197,6 @@ void *measure_smoke(void *arg)
 
         pthread_mutex_unlock(&smoke_mutex);
         sleep(1); // Measure every second
-    }
-    while (pause_flag)
-    {
-        sleep(1);
     }
     return NULL;
 }
@@ -299,6 +306,13 @@ void *count_cars_exiting(void *arg)
     }
     return NULL;
 }
+void kill_mutexes()
+{
+    pthread_mutex_destroy(&cars_mutex);
+    pthread_mutex_destroy(&smoke_mutex);
+    pthread_mutex_destroy(&natural_gas_mutex);
+    pthread_cond_destroy(&cond);
+}
 
 int main()
 {
@@ -326,10 +340,6 @@ int main()
     pthread_join(user_input_thread, NULL); // Wait for user input thread
 
     // Destroy mutexes and condition variable
-    pthread_mutex_destroy(&cars_mutex);
-    pthread_mutex_destroy(&smoke_mutex);
-    pthread_mutex_destroy(&natural_gas_mutex);
-    pthread_cond_destroy(&cond);
-
+    void kill_mutexes();
     return 0;
 }
