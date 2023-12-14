@@ -20,11 +20,11 @@ pthread_mutex_t cars_mutex;
 pthread_mutex_t co2_mutex;
 pthread_mutex_t natural_gas_mutex;
 pthread_mutex_t cars_exiting_mutex;
-pthread_mutex_t flag_mutex;
 char command;
 
 // Function to set terminal in raw mode to capture single key presses
-void set_raw_mode() {
+void set_raw_mode()
+{
     struct termios tty;
     tcgetattr(STDIN_FILENO, &tty);
     tty.c_lflag &= ~(ICANON | ECHO); // Disable echo and canonical mode
@@ -32,26 +32,30 @@ void set_raw_mode() {
 }
 
 // Function to reset terminal to original settings
-void reset_terminal_mode() {
+void reset_terminal_mode()
+{
     struct termios tty;
     tcgetattr(STDIN_FILENO, &tty);
     tty.c_lflag |= (ICANON | ECHO); // Enable echo and canonical mode
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 }
 
-void *handle_user_input(void *arg) {
+void *handle_user_input(void *arg)
+{
     set_raw_mode();
 
-    while (1) {
+    while (1)
+    {
         command = getchar();
 
-        pthread_mutex_lock(&flag_mutex);
-        if (command == 'p') {
+        if (command == 'p')
+        {
             pause_flag = 1;
             printf("\nPausing until further notice\n");
             printf("Please press C to continue...\n");
         }
-        else if (command == 'r') {
+        else if (command == 'r')
+        {
             // Reset logic
             alert_flag = 0;
             cars_in_tunnel = 0;
@@ -60,11 +64,21 @@ void *handle_user_input(void *arg) {
             printf("\nResetting all sensor values and state of tunnel \n");
             printf("Please press C to continue...\n");
         }
-        else if (command == 'c') {
+        else if (command == 'c')
+        {
             pause_flag = 0;
             printf("\nContinuing...\n");
         }
-        pthread_mutex_unlock(&flag_mutex);
+        else if (command == 'q')
+        {
+            printf("\nExiting...\n");
+            reset_terminal_mode();
+            exit(0);
+        }
+        else
+        {
+            printf("\nInvalid command. Please try again.\n");
+        }
     }
 
     reset_terminal_mode();
@@ -84,15 +98,13 @@ void *measure_co2(void *arg)
 
         if (co2_level > 99.0)
         {
-            pthread_mutex_lock(&flag_mutex);
             alert_flag = 1;
-            pthread_mutex_unlock(&flag_mutex);
         }
 
         pthread_mutex_unlock(&co2_mutex);
         sleep(1); // Measure every second
     }
-        while (pause_flag)
+    while (pause_flag)
     {
         sleep(1);
     }
@@ -112,15 +124,13 @@ void *measure_natural_gas(void *arg)
 
         if (natural_gas_level > 99.0)
         {
-            pthread_mutex_lock(&flag_mutex);
             alert_flag = 1;
-            pthread_mutex_unlock(&flag_mutex);
         }
 
         pthread_mutex_unlock(&natural_gas_mutex);
         sleep(1); // Measure every second
     }
-        while (pause_flag)
+    while (pause_flag)
     {
         sleep(1);
     }
@@ -131,10 +141,8 @@ void *count_cars_entering(void *arg)
 {
     while (1)
     {
-        pthread_mutex_lock(&flag_mutex);
         if (alert_flag)
         {
-            pthread_mutex_unlock(&flag_mutex);
             printf("High CO2/Natural Gas levels. Pausing entry \n");
             printf("Evacuating cars...\n");
             while (cars_in_tunnel)
@@ -145,9 +153,7 @@ void *count_cars_entering(void *arg)
             natural_gas_level = 0.0;
             printf("Cars evacuated. Resuming entry...\n");
             alert_flag = 0;
-            pthread_mutex_lock(&flag_mutex);
         }
-        pthread_mutex_unlock(&flag_mutex);
 
         pthread_mutex_lock(&cars_mutex);
         while (cars_in_tunnel >= MAX_CARS)
@@ -160,12 +166,12 @@ void *count_cars_entering(void *arg)
         pthread_mutex_unlock(&cars_mutex);
 
         sleep(rand() % 3); // Time delay between 0 and 2 seconds
-           while (pause_flag)
-    {
-        sleep(1);
+        while (pause_flag)
+        {
+            sleep(1);
+        }
     }
-    }
- 
+
     return NULL;
 }
 
@@ -199,13 +205,11 @@ int main()
     pthread_mutex_init(&cars_mutex, NULL);
     pthread_mutex_init(&co2_mutex, NULL);
     pthread_mutex_init(&natural_gas_mutex, NULL);
-    pthread_mutex_init(&flag_mutex, NULL); // Make sure this is initialized
     pthread_cond_init(&cond, NULL);
 
     // Create threads
     pthread_create(&thread1, NULL, count_cars_entering, NULL);
     pthread_create(&thread2, NULL, count_cars_exiting, NULL);
-    // pthread_create(&monitor_thread, NULL, monitor_tunnel, NULL);
     pthread_create(&co2_thread, NULL, measure_co2, NULL);
     pthread_create(&natural_gas_thread, NULL, measure_natural_gas, NULL);
     pthread_create(&user_input_thread, NULL, handle_user_input, NULL); // Create user input thread
@@ -222,7 +226,6 @@ int main()
     pthread_mutex_destroy(&cars_mutex);
     pthread_mutex_destroy(&co2_mutex);
     pthread_mutex_destroy(&natural_gas_mutex);
-    pthread_mutex_destroy(&flag_mutex);
     pthread_cond_destroy(&cond);
 
     return 0;
