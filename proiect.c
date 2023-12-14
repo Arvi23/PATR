@@ -5,16 +5,18 @@
 #include <string.h>
 #include <time.h>
 #include <termios.h>
-
+#include <stdbool.h>
 
 // Global variables
 const int MAX_CARS = 5; // Threshold for maximum cars in the tunnel
-int cars_in_tunnel = 0;
+unsigned int cars_in_tunnel = 0;
 float smoke_level = 0.0;
 float natural_gas_level = 0.0;
-int pause_flag = 0;  // Flag to pause the car entering thread
-int alert_flag = 0;  // Flag to alert the car entering thread
-int output_flag = 1; // Flag to output the current state of the tunnel
+
+
+bool pause_flag = false;  // Flag to pause the car entering thread
+bool alert_flag = false;  // Flag to alert the car entering thread
+bool output_flag = true; // Flag to output the current state of the tunnel
 char command;
 
 
@@ -123,6 +125,9 @@ void *handle_user_input(void *arg)
             printf("Alert flag: %d\n", alert_flag);
             printf("Pause flag: %d\n", pause_flag);
             printf("Output flag: %d\n", output_flag);
+            time_t currentTime;
+            time(&currentTime);
+            printf("Current time: %s", ctime(&currentTime));
         }
         else if (command == '1')
         {
@@ -141,8 +146,16 @@ void *handle_user_input(void *arg)
         }
         else if (command == '4')
         {
-            alert_flag = 1;
-            printf("Alert flag: %d\n", alert_flag);
+            if(alert_flag==0)
+            {
+                printf("Toggling alert flag...\n");
+                alert_flag = 1;
+            }
+            else
+            {
+                printf("Toggling alert flag...\n");
+                alert_flag = 0;
+            }
         }
         else if (command == 'h')
         {
@@ -174,6 +187,7 @@ void *handle_user_input(void *arg)
     }
 
     reset_terminal_mode();
+    //We have to reset the terminal before exiting, otherwise the terminal will bug out
     return NULL;
 }
 
@@ -187,7 +201,7 @@ void *measure_smoke(void *arg)
         {
             smoke_level = (rand() % 1000) / 10.0; // Random CO2 level between 0.0 and 99.9
             if (output_flag == 1)
-                printf("Measured smoke level: %.1f\n", smoke_level);
+                printf("Measured smoke level: %.1f\n\n", smoke_level);
         }
 
         if (smoke_level > 95.0)
@@ -206,10 +220,11 @@ void *measure_natural_gas(void *arg)
     while (1)
     {
         pthread_mutex_lock(&natural_gas_mutex);
-        if (pause_flag == 0 && alert_flag == 0 && output_flag == 1)
+        if (pause_flag == 0 && alert_flag == 0)
         {
             natural_gas_level = (rand() % 1000) / 10.0; // Random Natural Gas level between 0.0 and 99.9
-            printf("Measured Natural Gas level: %.1f\n", natural_gas_level);
+            if (output_flag == 1)
+                printf("Measured Natural Gas level: %.1f\n", natural_gas_level);
         }
 
         if (natural_gas_level > 95.0)
@@ -219,10 +234,6 @@ void *measure_natural_gas(void *arg)
 
         pthread_mutex_unlock(&natural_gas_mutex);
         sleep(1); // Measure every second
-    }
-    while (pause_flag)
-    {
-        sleep(1);
     }
     return NULL;
 }
@@ -246,7 +257,7 @@ void *count_cars_entering(void *arg)
                 cars_in_tunnel = 0;
                 printf("Sprinkler system turned off. Resuming normal activity\n");
             }
-            if (natural_gas_level > 95.0)
+            else if (natural_gas_level > 95.0)
             {
                 printf("Natural gas detected. Turning ventilation system to 100%%...\n");
                 printf("Playing alarm sound...\n");
@@ -259,7 +270,15 @@ void *count_cars_entering(void *arg)
                 printf("Ventilation system adjusted to normal levels. Resuming normal activity\n");
                 cars_in_tunnel = 0;
             }
-
+            else
+            {
+                printf("Alert flag set by operator. Turning ventilation system to 100%%...\n");
+                printf("Playing alarm sound...\n");
+                while (alert_flag)
+                {
+                    usleep(500000);
+                }
+            }
             alert_flag = 0;
         }
 
@@ -269,7 +288,8 @@ void *count_cars_entering(void *arg)
             printf("Cars entering mutex: Max capacity reached. Pausing entry.\n");
             pthread_cond_wait(&cond, &cars_mutex); // Wait for signal to resume
         }
-        cars_in_tunnel++;
+        if(alert_flag == 0)
+            cars_in_tunnel++;
         if (output_flag == 1)
             printf("Car entered. Cars in tunnel: %d\n", cars_in_tunnel);
         pthread_mutex_unlock(&cars_mutex);
@@ -297,7 +317,7 @@ void *count_cars_exiting(void *arg)
             pthread_cond_signal(&cond); // Signal the car entering thread
         }
         pthread_mutex_unlock(&cars_exiting_mutex);
-        sleep(rand() % 3); // Time delay between 0 and 3 seconds
+        sleep(rand() % 3 + 1); // Time delay between 0 and 3 seconds
 
         while (pause_flag)
         {
@@ -306,6 +326,7 @@ void *count_cars_exiting(void *arg)
     }
     return NULL;
 }
+
 void kill_mutexes()
 {
     pthread_mutex_destroy(&cars_mutex);
@@ -316,28 +337,110 @@ void kill_mutexes()
 
 int main()
 {
-    pthread_t thread1, thread2, monitor_thread, co2_thread, natural_gas_thread, user_input_thread;
-
+    pthread_t thread1, thread2, co2_thread, natural_gas_thread, user_input_thread;
+    time_t currentTime;
+    time(&currentTime);
+    printf("Current time: %s", ctime(&currentTime));
     // Initialize mutexes and condition variable
-    pthread_mutex_init(&cars_mutex, NULL);
-    pthread_mutex_init(&smoke_mutex, NULL);
-    pthread_mutex_init(&natural_gas_mutex, NULL);
-    pthread_cond_init(&cond, NULL);
+    // Also added some error handling for mutexes and threads
+    int error;
+    error = pthread_mutex_init(&cars_mutex, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to initialize cars_mutex: %s\n", strerror(error));
+        return 1;
+    }
 
-    // Create threads
-    pthread_create(&thread1, NULL, count_cars_entering, NULL);
-    pthread_create(&thread2, NULL, count_cars_exiting, NULL);
-    pthread_create(&co2_thread, NULL, measure_smoke, NULL);
-    pthread_create(&natural_gas_thread, NULL, measure_natural_gas, NULL);
-    pthread_create(&user_input_thread, NULL, handle_user_input, NULL); // Create user input thread
+    error = pthread_mutex_init(&smoke_mutex, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to initialize smoke_mutex: %s\n", strerror(error));
+        return 1;
+    }
 
-    // Wait for threads to finish
-    pthread_join(thread1, NULL);
-    pthread_join(thread2, NULL);
-    pthread_join(monitor_thread, NULL);
-    pthread_join(co2_thread, NULL);
-    pthread_join(natural_gas_thread, NULL);
-    pthread_join(user_input_thread, NULL); // Wait for user input thread
+    error = pthread_mutex_init(&natural_gas_mutex, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to initialize natural_gas_mutex: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_cond_init(&cond, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to initialize cond: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    // Create threads ########################################################################
+    error = pthread_create(&thread1, NULL, count_cars_entering, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create count_cars_entering thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_create(&thread2, NULL, count_cars_exiting, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create count_cars_exiting thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_create(&co2_thread, NULL, measure_smoke, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create measure_smoke thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_create(&natural_gas_thread, NULL, measure_natural_gas, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create measure_natural_gas thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_create(&user_input_thread, NULL, handle_user_input, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to create handle_user_input thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    // Wait for threads to finish ########################################################################
+    error = pthread_join(thread1, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to join count_cars_entering thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_join(thread2, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to join count_cars_exiting thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_join(co2_thread, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to join measure_smoke thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_join(natural_gas_thread, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to join measure_natural_gas thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
+
+    error = pthread_join(user_input_thread, NULL);
+    if (error != 0) {
+        fprintf(stderr, "Failed to join handle_user_input thread: %s\n", strerror(error));
+        kill_mutexes();
+        return 1;
+    }
 
     // Destroy mutexes and condition variable
     void kill_mutexes();
