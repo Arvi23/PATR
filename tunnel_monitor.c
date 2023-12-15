@@ -134,17 +134,17 @@ void *handle_user_input(void *arg)
         else if (command == '1')
         {
             smoke_level = 100;
-            printf("Smoke level: %.1f\n", smoke_level);
+            printf("Setting Smoke level: %.1f\n", smoke_level);
         }
         else if (command == '2')
         {
             natural_gas_level = 100;
-            printf("Natural gas level: %.1f\n", natural_gas_level);
+            printf("Setting Natural gas level: %.1f\n", natural_gas_level);
         }
         else if (command == '3')
         {
             cars_in_tunnel = 10;
-            printf("Cars in tunnel: %d\n", cars_in_tunnel);
+            printf("Setting Cars in tunnel: %d\n", cars_in_tunnel);
         }
         else if (command == '4')
         {
@@ -296,7 +296,7 @@ void *count_cars_entering(void *arg) // Function to count cars entering the tunn
             printf("Car entered. Cars in tunnel: %d\n", cars_in_tunnel);
         pthread_mutex_unlock(&cars_mutex);
 
-        sleep(rand() % 3); // Time delay between 0 and 3 seconds
+        sleep(rand() % 3 + 1); // Time delay between 1 and 4 seconds
         while (pause_flag) // If pause flag is set, wait until it is unset
         {
             sleep(1);
